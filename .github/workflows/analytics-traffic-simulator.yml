@@ -1,4 +1,4 @@
-﻿name: Scheduled Real Mobile Traffic Simulator (Playwright)
+name: Scheduled Real Mobile Traffic Simulator (Playwright)
 
 on:
   schedule:
