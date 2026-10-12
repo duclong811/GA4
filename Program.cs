@@ -12,7 +12,6 @@ string? apiSecret = Environment.GetEnvironmentVariable("GA_API_SECRET");
 if (string.IsNullOrWhiteSpace(measurementId) || string.IsNullOrWhiteSpace(apiSecret))
 {
     Console.WriteLine("❌ Lỗi: Thiếu biến môi trường GA_MEASUREMENT_ID hoặc GA_API_SECRET.");
-    Console.WriteLine("Vui lòng cấu hình 2 biến này trong GitHub Secrets hoặc trên máy trước khi chạy.");
     return;
 }
 
@@ -34,11 +33,11 @@ string[] returningUserPool = [
 // 3. Danh mục sản phẩm mẫu quán Cafe
 var menuItems = new[]
 {
-    new { Id = "1", Name = "Cà phê Muối Đặc Sản", Price = 35000, Category = "Coffee" },
-    new { Id = "2", Name = "Trà Sữa Oolong Nướng", Price = 45000, Category = "MilkTea" },
-    new { Id = "3", Name = "Bạc Xỉu Sài Gòn", Price = 32000, Category = "Coffee" },
-    new { Id = "4", Name = "Trà Đào Cam Sả", Price = 42000, Category = "FruitTea" },
-    new { Id = "5", Name = "Croissant Bơ Tỏi", Price = 38000, Category = "Bakery" }
+    new { Id = "1", Name = "Ca phe Muoi Dac San", Price = 35000, Category = "Coffee" },
+    new { Id = "2", Name = "Tra Sua Oolong Nuong", Price = 45000, Category = "MilkTea" },
+    new { Id = "3", Name = "Bac Xiu Sai Gon", Price = 32000, Category = "Coffee" },
+    new { Id = "4", Name = "Tra Dao Cam Sa", Price = 42000, Category = "FruitTea" },
+    new { Id = "5", Name = "Croissant Bo Toi", Price = 38000, Category = "Bakery" }
 };
 
 var random = new Random();
@@ -59,16 +58,8 @@ for (int i = 0; i < usersToSimulate; i++)
         : $"{random.Next(100000000, 999999999)}.{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
 
     long sessionId = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+    int engagementMsec = random.Next(15000, 45000);
     var events = new List<object>();
-
-    // Nếu là người dùng mới: thêm first_visit
-    if (!isReturning)
-    {
-        events.Add(new { name = "first_visit", @params = new { session_id = sessionId } });
-    }
-
-    // Sự kiện mở phiên
-    events.Add(new { name = "session_start", @params = new { session_id = sessionId } });
 
     // 1. Vào xem trang Menu (page_view)
     events.Add(new
@@ -78,12 +69,23 @@ for (int i = 0; i < usersToSimulate; i++)
         {
             page_title = "AI-SMARTSERVE | Handcrafted Menu",
             page_location = "https://web-gamma-topaz-43.vercel.app/menu",
-            session_id = sessionId,
-            engagement_time_msec = random.Next(10000, 35000)
+            session_id = sessionId.ToString(),
+            engagement_time_msec = engagementMsec
         }
     });
 
-    // 2. Xem chi tiết 1 món ăn (view_item)
+    // 2. Tương tác tích cực (user_engagement) - giúp GA4 tính là người dùng đang active trong Realtime
+    events.Add(new
+    {
+        name = "user_engagement",
+        @params = new
+        {
+            session_id = sessionId.ToString(),
+            engagement_time_msec = engagementMsec
+        }
+    });
+
+    // 3. Xem chi tiết 1 món ăn (view_item)
     var selectedItem = menuItems[random.Next(menuItems.Length)];
     events.Add(new
     {
@@ -92,7 +94,7 @@ for (int i = 0; i < usersToSimulate; i++)
         {
             currency = "VND",
             value = selectedItem.Price,
-            session_id = sessionId,
+            session_id = sessionId.ToString(),
             items = new[]
             {
                 new {
@@ -106,7 +108,7 @@ for (int i = 0; i < usersToSimulate; i++)
         }
     });
 
-    // 3. Xác suất 60% thêm món vào giỏ hàng (add_to_cart)
+    // 4. Xác suất 60% thêm món vào giỏ hàng (add_to_cart)
     if (random.NextDouble() < 0.60)
     {
         events.Add(new
@@ -116,7 +118,7 @@ for (int i = 0; i < usersToSimulate; i++)
             {
                 currency = "VND",
                 value = selectedItem.Price,
-                session_id = sessionId,
+                session_id = sessionId.ToString(),
                 items = new[]
                 {
                     new {
@@ -129,7 +131,7 @@ for (int i = 0; i < usersToSimulate; i++)
             }
         });
 
-        // 4. Xác suất 40% trong số người thêm giỏ hàng sẽ đặt hàng thành công (purchase)
+        // 5. Xác suất 40% trong số người thêm giỏ hàng sẽ đặt hàng thành công (purchase)
         if (random.NextDouble() < 0.40)
         {
             string orderCode = $"ORD-{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() % 1000000:D6}";
@@ -141,7 +143,7 @@ for (int i = 0; i < usersToSimulate; i++)
                     transaction_id = orderCode,
                     currency = "VND",
                     value = selectedItem.Price,
-                    session_id = sessionId,
+                    session_id = sessionId.ToString(),
                     items = new[]
                     {
                         new {
