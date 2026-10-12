@@ -5,15 +5,9 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-// 1. Đọc cấu hình từ biến môi trường
-string? measurementId = Environment.GetEnvironmentVariable("GA_MEASUREMENT_ID");
-string? apiSecret = Environment.GetEnvironmentVariable("GA_API_SECRET");
-
-if (string.IsNullOrWhiteSpace(measurementId) || string.IsNullOrWhiteSpace(apiSecret))
-{
-    Console.WriteLine("❌ Lỗi: Thiếu biến môi trường GA_MEASUREMENT_ID hoặc GA_API_SECRET.");
-    return;
-}
+// 1. Đọc cấu hình từ biến môi trường, nếu chạy trên máy local thì dùng giá trị mặc định đã setup
+string measurementId = Environment.GetEnvironmentVariable("GA_MEASUREMENT_ID") ?? "G-NJFPHGJW2P";
+string apiSecret = Environment.GetEnvironmentVariable("GA_API_SECRET") ?? "QQ-X9nm-RFWzllJvaE2yeQ";
 
 using var httpClient = new HttpClient();
 string endpoint = $"https://www.google-analytics.com/mp/collect?measurement_id={measurementId}&api_secret={apiSecret}";
@@ -41,16 +35,18 @@ var menuItems = new[]
 };
 
 var random = new Random();
-int usersToSimulate = random.Next(3, 8);
+int usersToSimulate = random.Next(3, 6);
 
 Console.WriteLine($"=================================================");
-Console.WriteLine($"🚀 Bắt đầu mô phỏng {usersToSimulate} phiên truy cập vào GA4...");
+Console.WriteLine($"🚀 Bắt đầu mô phỏng {usersToSimulate} phiên truy cập vào GA4 trên máy LOCAL...");
 Console.WriteLine($"Measurement ID: {measurementId}");
+Console.WriteLine($"Website: https://www.ai-smartserve.io.vn");
 Console.WriteLine($"=================================================\n");
 
 for (int i = 0; i < usersToSimulate; i++)
 {
-    bool isReturning = random.NextDouble() < 0.70;
+    // 30% khách cũ, 70% khách mới
+    bool isReturning = random.NextDouble() < 0.30;
 
     string clientId = isReturning
         ? returningUserPool[random.Next(returningUserPool.Length)]
@@ -67,7 +63,7 @@ for (int i = 0; i < usersToSimulate; i++)
         @params = new
         {
             page_title = "AI-SMARTSERVE | Handcrafted Menu",
-            page_location = "https://web-gamma-topaz-43.vercel.app/menu",
+            page_location = "https://www.ai-smartserve.io.vn/menu",
             session_id = sessionId,
             engagement_time_msec = engagementMsec,
             debug_mode = 1
@@ -176,7 +172,7 @@ for (int i = 0; i < usersToSimulate; i++)
     try
     {
         var response = await httpClient.PostAsync(endpoint, content);
-        string userTypeLabel = isReturning ? "[Returning User 🔄]" : "[New User 🆕      ]";
+        string userTypeLabel = isReturning ? "[Returning User 🔄 (30%)]" : "[New User 🆕 (70%)      ]";
 
         if (response.IsSuccessStatusCode)
         {
@@ -195,4 +191,4 @@ for (int i = 0; i < usersToSimulate; i++)
     await Task.Delay(random.Next(1000, 2000));
 }
 
-Console.WriteLine("\n🎉 Đã hoàn thành đợt mô phỏng traffic!");
+Console.WriteLine("\n🎉 Đã hoàn thành đợt mô phỏng traffic trên máy local!");

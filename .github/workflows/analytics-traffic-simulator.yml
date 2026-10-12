@@ -2,8 +2,9 @@
 
 on:
   schedule:
-    # Chạy định kỳ mỗi 2 tiếng 1 lần
-    - cron: '0 */2 * * *'
+    # Chạy vào phút 15 của mỗi 2 tiếng (01:15, 03:15, 05:15... UTC -> tức là 07:15, 09:15, 11:15, 13:15, 15:15... giờ VN)
+    # Tránh phút 00 để không bị nghẽn máy chủ GitHub
+    - cron: '15 */2 * * *'
 
   # Cho phép bấm nút "Run workflow" thủ công trên GitHub UI bất kỳ lúc nào để test
   workflow_dispatch:
@@ -32,4 +33,5 @@ jobs:
       - name: Run Real Browser Traffic Simulator
         env:
           TARGET_URL: "https://www.ai-smartserve.io.vn"
+          VN_PROXY: ${{ secrets.VN_PROXY }}
         run: node simulate.mjs
