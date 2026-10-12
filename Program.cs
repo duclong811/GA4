@@ -18,7 +18,7 @@ if (string.IsNullOrWhiteSpace(measurementId) || string.IsNullOrWhiteSpace(apiSec
 using var httpClient = new HttpClient();
 string endpoint = $"https://www.google-analytics.com/mp/collect?measurement_id={measurementId}&api_secret={apiSecret}";
 
-// 2. Danh sách Client ID cố định đại diện cho Returning Users (Khách quen quay lại)
+// 2. Danh sách Client ID cố định đại diện cho Returning Users
 string[] returningUserPool = [
     "100100101.1710000001",
     "100100102.1710000002",
@@ -41,7 +41,7 @@ var menuItems = new[]
 };
 
 var random = new Random();
-int usersToSimulate = random.Next(3, 8); // Mô phỏng ngẫu nhiên từ 3 đến 7 khách
+int usersToSimulate = random.Next(3, 8);
 
 Console.WriteLine($"=================================================");
 Console.WriteLine($"🚀 Bắt đầu mô phỏng {usersToSimulate} phiên truy cập vào GA4...");
@@ -50,7 +50,6 @@ Console.WriteLine($"=================================================\n");
 
 for (int i = 0; i < usersToSimulate; i++)
 {
-    // Tỷ lệ: 70% là Khách cũ (Returning User), 30% là Khách mới (New User)
     bool isReturning = random.NextDouble() < 0.70;
 
     string clientId = isReturning
@@ -58,7 +57,7 @@ for (int i = 0; i < usersToSimulate; i++)
         : $"{random.Next(100000000, 999999999)}.{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
 
     long sessionId = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-    int engagementMsec = random.Next(15000, 45000);
+    long engagementMsec = random.Next(15000, 45000);
     var events = new List<object>();
 
     // 1. Vào xem trang Menu (page_view)
@@ -69,19 +68,21 @@ for (int i = 0; i < usersToSimulate; i++)
         {
             page_title = "AI-SMARTSERVE | Handcrafted Menu",
             page_location = "https://web-gamma-topaz-43.vercel.app/menu",
-            session_id = sessionId.ToString(),
-            engagement_time_msec = engagementMsec
+            session_id = sessionId,
+            engagement_time_msec = engagementMsec,
+            debug_mode = 1
         }
     });
 
-    // 2. Tương tác tích cực (user_engagement) - giúp GA4 tính là người dùng đang active trong Realtime
+    // 2. Tương tác tích cực (user_engagement)
     events.Add(new
     {
         name = "user_engagement",
         @params = new
         {
-            session_id = sessionId.ToString(),
-            engagement_time_msec = engagementMsec
+            session_id = sessionId,
+            engagement_time_msec = engagementMsec,
+            debug_mode = 1
         }
     });
 
@@ -94,7 +95,9 @@ for (int i = 0; i < usersToSimulate; i++)
         {
             currency = "VND",
             value = selectedItem.Price,
-            session_id = sessionId.ToString(),
+            session_id = sessionId,
+            engagement_time_msec = 5000,
+            debug_mode = 1,
             items = new[]
             {
                 new {
@@ -118,7 +121,9 @@ for (int i = 0; i < usersToSimulate; i++)
             {
                 currency = "VND",
                 value = selectedItem.Price,
-                session_id = sessionId.ToString(),
+                session_id = sessionId,
+                engagement_time_msec = 5000,
+                debug_mode = 1,
                 items = new[]
                 {
                     new {
@@ -131,7 +136,7 @@ for (int i = 0; i < usersToSimulate; i++)
             }
         });
 
-        // 5. Xác suất 40% trong số người thêm giỏ hàng sẽ đặt hàng thành công (purchase)
+        // 5. Xác suất 40% đặt hàng (purchase)
         if (random.NextDouble() < 0.40)
         {
             string orderCode = $"ORD-{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() % 1000000:D6}";
@@ -143,7 +148,8 @@ for (int i = 0; i < usersToSimulate; i++)
                     transaction_id = orderCode,
                     currency = "VND",
                     value = selectedItem.Price,
-                    session_id = sessionId.ToString(),
+                    session_id = sessionId,
+                    debug_mode = 1,
                     items = new[]
                     {
                         new {
@@ -158,7 +164,6 @@ for (int i = 0; i < usersToSimulate; i++)
         }
     }
 
-    // Đóng gói JSON gửi tới GA4 Measurement Protocol
     var payload = new
     {
         client_id = clientId,
@@ -187,7 +192,6 @@ for (int i = 0; i < usersToSimulate; i++)
         Console.WriteLine($"❌ Ngoại lệ khi gửi: {ex.Message}");
     }
 
-    // Giãn cách 1 - 2 giây giữa các khách
     await Task.Delay(random.Next(1000, 2000));
 }
 
