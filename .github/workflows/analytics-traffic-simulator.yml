@@ -2,8 +2,8 @@
 
 on:
   schedule:
-    # Chạy tự động mỗi 3 tiếng 1 lần (vào phút 0)
-    - cron: '0 */3 * * *'
+    # Chạy định kỳ mỗi 2 tiếng 1 lần
+    - cron: '0 */2 * * *'
 
   # Cho phép bấm nút "Run workflow" thủ công trên GitHub UI bất kỳ lúc nào để test
   workflow_dispatch:
@@ -11,6 +11,8 @@ on:
 jobs:
   simulate-traffic:
     runs-on: ubuntu-latest
+    # Đặt thời gian timeout tối đa cho job là 60 phút
+    timeout-minutes: 60
 
     steps:
       - name: Checkout Code

@@ -1,19 +1,29 @@
-﻿# Real Mobile Traffic Simulator (Playwright Headless Browser)
+﻿# Real Mobile Traffic Simulator (Giờ Việt Nam & Giờ Cao Điểm)
 
-Công cụ mô phỏng người dùng thật cầm điện thoại (iPhone, Samsung, Pixel) truy cập trang web `https://www.ai-smartserve.io.vn`, tự động chạy theo lịch trên GitHub Actions.
+Công cụ mô phỏng người dùng thật cầm điện thoại truy cập trang web `https://www.ai-smartserve.io.vn`, tối ưu theo thói quen sinh hoạt và giờ mở cửa quán cafe tại Việt Nam.
 
-## Cơ chế hoạt động người thật 100%
-- **Trình duyệt Chromium thật:** Mở trang web thật, tải mã nguồn HTML/JS, kích hoạt mã `gtag.js` tự nhiên như người dùng mở Safari/Chrome trên điện thoại.
-- **Hiển thị ngay trên GA4 Realtime:** Vì là trình duyệt thật tải trang web thật, Google Analytics 4 nhận diện ngay lập tức trên bản đồ và số người hoạt động trong 30 phút.
-- **Phân loại Khách cũ vs Khách mới:**
-  - 70% Khách quen quay lại (Returning Users): Tự động duy trì cookie `_ga` cố định.
-  - 30% Khách mới (New Users): Phiên hoàn toàn mới, sinh sự kiện khách truy cập lần đầu.
-- **Hành vi tự nhiên:** Cuộn lướt xem menu, click vào món ăn, lưu lại trang từ 10 - 20 giây.
+## 🕒 Quy tắc vận hành theo Giờ Việt Nam (GMT+7)
 
----
+1. **Khung giờ đóng cửa (23:00 – 06:30 sáng):**
+   - Không có khách nào vào web.
+   - Script tự động phát hiện giờ đêm và dừng ngay lập tức để tiết kiệm tài nguyên.
 
-## Cách chạy thủ công để test
-1. Vào tab **Actions** trên GitHub Repo `GA4`.
-2. Chọn workflow **Scheduled Real Mobile Traffic Simulator (Playwright)**.
-3. Bấm nút **Run workflow**.
-4. Mở Google Analytics vào mục **Reports $\rightarrow$ Realtime** để xem người dùng xuất hiện trực tiếp trên bản đồ!
+2. **Tần suất chạy:**
+   - Cứ **khoảng 2 tiếng** có 1 đợt khách mới vào quán (`0 */2 * * *`).
+
+3. **Phân loại giờ cao điểm & số lượng khách:**
+   - **Giờ cao điểm:**
+     - Buổi sáng: **06:30 – 09:30**
+     - Buổi trưa: **11:00 – 13:30**
+     - Buổi tối: **17:00 – 20:00**
+     - $\rightarrow$ Số lượng khách đông hơn: từ **4 đến 8 khách** / đợt.
+   - **Giờ bình thường:**
+     - Các khung giờ còn lại trong ngày (09:30 - 11:00, 13:30 - 17:00, 20:00 - 23:00).
+     - $\rightarrow$ Số lượng khách: từ **4 đến 6 khách** / đợt.
+
+4. **Tỷ lệ khách:**
+   - **30%** Khách cũ quay lại (Returning Users - duy trì Cookie định danh).
+   - **70%** Khách mới (New Users - mở trình duyệt sạch).
+
+5. **Giãn cách tự nhiên giữa các khách:**
+   - Mỗi khách vào cách nhau **khoảng 5 phút** (dao động 4.5 – 5.5 phút), tạo biểu đồ lưu lượng rải đều cực kỳ tự nhiên.
