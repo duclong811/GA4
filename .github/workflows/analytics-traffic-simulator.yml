@@ -1,4 +1,4 @@
-﻿name: Scheduled GA4 Traffic Simulator (C#)
+﻿name: Scheduled Real Mobile Traffic Simulator (Playwright)
 
 on:
   schedule:
@@ -9,20 +9,25 @@ on:
   workflow_dispatch:
 
 jobs:
-  run-simulator:
+  simulate-traffic:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          dotnet-version: '8.0.x'
+          node-version: 20
 
-      - name: Run C# Traffic Simulator
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Real Browser Traffic Simulator
         env:
-          GA_MEASUREMENT_ID: ${{ secrets.GA_MEASUREMENT_ID }}
-          GA_API_SECRET: ${{ secrets.GA_API_SECRET }}
-        run: dotnet run
+          TARGET_URL: "https://www.ai-smartserve.io.vn"
+        run: node simulate.mjs

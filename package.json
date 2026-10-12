@@ -1,0 +1,13 @@
+﻿{
+  "name": "ga4-traffic-simulator",
+  "version": "1.0.0",
+  "description": "Simulate real mobile users visiting website for Google Analytics 4",
+  "main": "simulate.mjs",
+  "type": "module",
+  "scripts": {
+    "start": "node simulate.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.50.0"
+  }
+}

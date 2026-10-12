@@ -1,46 +1,19 @@
-﻿# GA4 Traffic Simulator (C# .NET 8 LTS)
+﻿# Real Mobile Traffic Simulator (Playwright Headless Browser)
 
-Công cụ mô phỏng lưu lượng người dùng (Traffic & E-commerce Events) cho Google Analytics 4, chạy tự động theo lịch thông qua GitHub Actions.
+Công cụ mô phỏng người dùng thật cầm điện thoại (iPhone, Samsung, Pixel) truy cập trang web `https://www.ai-smartserve.io.vn`, tự động chạy theo lịch trên GitHub Actions.
 
-## Tính năng
-- **Mô phỏng Người dùng mới vs Người dùng cũ:**
-  - 70% Khách quen quay lại (Returning Users) sử dụng pool `client_id` cố định.
-  - 30% Khách mới (New Users) kèm sự kiện `first_visit`.
-- **Phễu E-commerce đầy đủ:**
-  - `session_start`
-  - `page_view` (Menu/Trang chủ)
-  - `view_item` (Xem món)
-  - `add_to_cart` (Xác suất 60%)
-  - `purchase` (Xác suất 40% của giỏ hàng)
-- **Tự động chạy định kỳ:** Chạy mỗi 3 tiếng qua GitHub Actions cron job hoặc chạy thủ công qua nút `Run workflow`.
+## Cơ chế hoạt động người thật 100%
+- **Trình duyệt Chromium thật:** Mở trang web thật, tải mã nguồn HTML/JS, kích hoạt mã `gtag.js` tự nhiên như người dùng mở Safari/Chrome trên điện thoại.
+- **Hiển thị ngay trên GA4 Realtime:** Vì là trình duyệt thật tải trang web thật, Google Analytics 4 nhận diện ngay lập tức trên bản đồ và số người hoạt động trong 30 phút.
+- **Phân loại Khách cũ vs Khách mới:**
+  - 70% Khách quen quay lại (Returning Users): Tự động duy trì cookie `_ga` cố định.
+  - 30% Khách mới (New Users): Phiên hoàn toàn mới, sinh sự kiện khách truy cập lần đầu.
+- **Hành vi tự nhiên:** Cuộn lướt xem menu, click vào món ăn, lưu lại trang từ 10 - 20 giây.
 
 ---
 
-## Hướng dẫn đẩy lên GitHub Repository riêng
-
-Mở PowerShell tại thư mục này (`Desktop/GaTrafficSimulator`) và chạy các lệnh:
-
-```bash
-git init
-git add .
-git commit -m "feat: initial GA4 traffic simulator in C# .NET 8"
-git branch -M main
-git remote add origin https://github.com/<tai-khoan-cua-ban>/<ten-repo-moi>.git
-git push -u origin main
-```
-
----
-
-## Cấu hình Secret trên GitHub
-
-1. Truy cập repo của bạn trên GitHub $\rightarrow$ **Settings** $\rightarrow$ **Secrets and variables** $\rightarrow$ **Actions**.
-2. Bấm **New repository secret** và thêm 2 secret:
-   - `GA_MEASUREMENT_ID`: Ví dụ `G-XXXXXXXXXX`
-   - `GA_API_SECRET`: Tạo trong GA4 (**Admin** $\rightarrow$ **Data Streams** $\rightarrow$ chọn Stream $\rightarrow$ **Measurement Protocol API secrets**).
-
----
-
-## Kiểm tra hoạt động
-1. Vào tab **Actions** trên GitHub.
-2. Chọn **Scheduled GA4 Traffic Simulator (C#)** $\rightarrow$ Bấm **Run workflow** để chạy thử.
-3. Mở [Google Analytics](https://analytics.google.com/) $\rightarrow$ **Reports** $\rightarrow$ **Realtime** để xem các sự kiện được bắn về trực tiếp.
+## Cách chạy thủ công để test
+1. Vào tab **Actions** trên GitHub Repo `GA4`.
+2. Chọn workflow **Scheduled Real Mobile Traffic Simulator (Playwright)**.
+3. Bấm nút **Run workflow**.
+4. Mở Google Analytics vào mục **Reports $\rightarrow$ Realtime** để xem người dùng xuất hiện trực tiếp trên bản đồ!
