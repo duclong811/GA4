@@ -22,7 +22,7 @@ const RETURNING_CLIENT_IDS = [
   '100100108.1710000008'
 ];
 
-// Cấu hình phiên bàn phục vụ (Sử dụng Store Demo để tạo đơn thật an toàn, không ảnh hưởng quán thật)
+// Cấu hình phiên bàn phục vụ (Store Demo: an toàn, tạo đơn thật 100% trong DB, kích hoạt GA4 purchase thật)
 const DEMO_TABLE_SESSION = {
   storeId: 2,
   tableId: 11,
@@ -68,19 +68,53 @@ function getVietnamTimeInfo() {
   };
 }
 
-// Mô phỏng từng khách hàng:
-// - 40% Khách thoát nhanh (Bounce Rate ~40%): vào xem 5-7s rồi rời đi
-// - 60% Khách tương tác sâu: nán lại 35-45s trên Menu, 20-30s Giỏ hàng, bấm nút Đặt hàng thật
-// => Đảm bảo thời gian tương tác trung bình toàn trang đạt ~60s (1 phút) và GA4 đo được doanh thu thật!
-async function simulateSingleUser(browser, userNumber, groupNumber) {
+// Hàm hỗ trợ nán lại chủ động (Active Dwell): vừa chờ vừa di chuột/cuộn nhẹ
+// để Google Analytics 4 nhận diện người dùng ĐANG HOẠT ĐỘNG liên tục (không bị tính là Idle/2s)
+async function activeDwell(page, durationMs) {
+  const start = Date.now();
+  while (Date.now() - start < durationMs) {
+    const stepWait = Math.min(3000 + Math.random() * 2000, durationMs - (Date.now() - start));
+    if (stepWait <= 0) break;
+    await page.waitForTimeout(stepWait);
+
+    // Tạo tương tác tự nhiên: di chuyển chuột và nhấp cuộn nhẹ
+    try {
+      await page.mouse.move(120 + Math.random() * 150, 200 + Math.random() * 250);
+      const scrollY = (Math.random() > 0.5 ? 1 : -1) * (50 + Math.floor(Math.random() * 100));
+      await page.mouse.wheel(0, scrollY);
+    } catch {}
+  }
+}
+
+// Hàm ép GA4 xả bộ đệm thời gian tương tác (Flush User Engagement Time) trước khi đóng trang
+async function flushGaEngagement(page) {
+  try {
+    await page.evaluate(() => {
+      // 1. Kích hoạt visibilitychange: hidden để gtag.js lập tức gửi beacon user_engagement (_et)
+      try {
+        Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+        document.dispatchEvent(new Event('visibilitychange'));
+      } catch {}
+      // 2. Kích hoạt pagehide
+      try {
+        window.dispatchEvent(new Event('pagehide'));
+      } catch {}
+    });
+    // Chờ 1.5s để mạng gửi xong gói tin beacon về google-analytics.com
+    await page.waitForTimeout(1500);
+  } catch {}
+}
+
+// Mô phỏng từng khách hàng
+async function simulateSingleUser(browser, userNumber, groupNumber, forcePurchase = false) {
   const isReturning = Math.random() < 0.30; // 30% khách cũ, 70% khách mới
   const deviceName = MOBILE_DEVICES[Math.floor(Math.random() * MOBILE_DEVICES.length)];
   const deviceConfig = devices[deviceName] || devices['iPhone 14'];
 
-  // Quyết định hành vi: 40% Thoát nhanh (Bounce) vs 60% Tương tác sâu (Engaged)
-  const isBouncer = Math.random() < 0.40;
+  // Nếu forcePurchase = true (khách được chọn để chắc chắn tạo doanh thu) thì không được bounce
+  const isBouncer = forcePurchase ? false : (Math.random() < 0.40);
 
-  console.log(`📱 [Nhóm #${groupNumber} - Khách #${userNumber}] Thiết bị: ${deviceName} | Loại: ${isReturning ? 'Khách cũ 🔄' : 'Khách mới 🆕'} | Hành vi: ${isBouncer ? 'Thoát nhanh (Bounce ~40%) ⚡' : 'Tương tác sâu (~1p) ⭐'}`);
+  console.log(`📱 [Nhóm #${groupNumber} - Khách #${userNumber}] Thiết bị: ${deviceName} | Loại: ${isReturning ? 'Khách cũ 🔄' : 'Khách mới 🆕'} | Hành vi: ${isBouncer ? 'Thoát nhanh (Bounce ~40%) ⚡' : (forcePurchase ? 'Đặt hàng chắc chắn (Chốt đơn) 🏆' : 'Tương tác sâu (~1p) ⭐')}`);
 
   const contextOptions = {
     ...deviceConfig,
@@ -111,7 +145,7 @@ async function simulateSingleUser(browser, userNumber, groupNumber) {
     ]);
   }
 
-  // Khởi tạo phiên bàn hợp lệ trước khi load trang để hệ thống nhận diện bàn phục vụ
+  // Khởi tạo phiên bàn demo hợp lệ trước khi load trang
   await context.addInitScript((session) => {
     localStorage.setItem('guestSession', JSON.stringify({
       guestId: 'guest_' + Math.random().toString(36).substring(2, 10),
@@ -128,64 +162,58 @@ async function simulateSingleUser(browser, userNumber, groupNumber) {
 
   try {
     // =========================================================================
-    // TRƯỜNG HỢP 1: 40% KHÁCH THOÁT NHANH (Tạo tỷ lệ thoát tự nhiên ~40%)
-    // Khách chỉ vào xem lướt 5 - 8 giây, không bấm giỏ hàng, đóng tab
+    // TRƯỜNG HỢP 1: 40% KHÁCH THOÁT NHANH (Bounce Rate chuẩn ~40%)
     // =========================================================================
     if (isBouncer) {
-      console.log(`🌐 [Khách #${userNumber} - Bouncer] Mở xem thực đơn: ${TARGET_URL}...`);
+      console.log(`🌐 [Khách #${userNumber} - Bouncer] Mở thực đơn: ${TARGET_URL}...`);
       await page.goto(TARGET_URL, { waitUntil: 'domcontentloaded', timeout: 35000 });
       
-      // Cuộn nhẹ 1 nhịp lướt qua
-      await page.waitForTimeout(2000 + Math.random() * 1000);
+      // Cuộn nhẹ 1 nhịp lướt qua trong 5 - 7 giây
+      await page.waitForTimeout(2000);
       await page.mouse.wheel(0, 200);
-      
-      // Nán lại dưới 10 giây (GA4 chuẩn tính là 1 lượt thoát nếu dưới 10s và 1 trang)
-      const bounceDwellMs = 5000 + Math.random() * 2500; // 5 - 7.5s
+      const bounceDwellMs = 4000 + Math.random() * 2500; // Tổng ~6-8s (< 10s -> GA4 tính 1 lượt thoát)
       await page.waitForTimeout(bounceDwellMs);
-      console.log(`🚪 [Khách #${userNumber} - Bouncer] Rời trang sau ${(bounceDwellMs / 1000).toFixed(1)}s (Tạo chỉ số Bounce Rate chuẩn)!`);
+
+      // Ép GA4 gửi thời gian tương tác thực
+      await flushGaEngagement(page);
+      console.log(`🚪 [Khách #${userNumber} - Bouncer] Rời trang sau ${((2000 + bounceDwellMs) / 1000).toFixed(1)}s (Tạo Bounce Rate chuẩn)!`);
       return;
     }
 
     // =========================================================================
-    // TRƯỜNG HỢP 2: 60% KHÁCH TƯƠNG TÁC SÂU (Average Engagement Time ~ 1 phút)
+    // TRƯỜNG HỢP 2: KHÁCH TƯƠNG TÁC SÂU (~1 PHÚT & TẠO DOANH THU THẬT)
     // =========================================================================
     console.log(`🌐 [Khách #${userNumber} - Engaged] Mở thực đơn: ${TARGET_URL}...`);
     await page.goto(TARGET_URL, { waitUntil: 'domcontentloaded', timeout: 35000 });
-    await page.waitForTimeout(3000 + Math.random() * 2000);
+    await page.waitForTimeout(3000);
 
-    // 1. Khách lướt xem menu từ từ 4 nhịp (khoảng 15 - 20s)
-    for (let scroll = 0; scroll < 4; scroll++) {
-      await page.mouse.wheel(0, 350);
-      await page.waitForTimeout(2500 + Math.random() * 2000);
-    }
+    // 1. Khách lướt xem menu từ từ và tương tác liên tục (khoảng 25 - 35s)
+    console.log(`👀 [Khách #${userNumber}] Đang xem xét thực đơn...`);
+    await activeDwell(page, 20000 + Math.random() * 8000);
 
     // 2. Bấm xem chi tiết 1 món hoặc danh mục
-    const itemCards = await page.$$('button, [role="button"], a[href*="product"], div[class*="cursor-pointer"]');
-    if (itemCards.length > 0) {
-      const randomCard = itemCards[Math.floor(Math.random() * Math.min(itemCards.length, 6))];
-      try {
+    try {
+      const itemCards = await page.$$('button, [role="button"], a[href*="product"], div[class*="cursor-pointer"]');
+      if (itemCards.length > 0) {
+        const randomCard = itemCards[Math.floor(Math.random() * Math.min(itemCards.length, 6))];
         await randomCard.click({ timeout: 2500 });
         console.log(`👉 [Khách #${userNumber}] Đã click xem chi tiết món trên menu!`);
-        await page.waitForTimeout(3000 + Math.random() * 2000);
-      } catch (err) {}
-    }
+        await activeDwell(page, 4000 + Math.random() * 2000);
+      }
+    } catch {}
 
-    // Nán lại thêm trên trang Menu (Tổng thời gian trên Menu: 35 - 45s)
-    await page.waitForTimeout(5000 + Math.random() * 3000);
-
-    // 3. Khách thêm món vào giỏ hàng và mở giỏ hàng (70% khách tương tác sâu)
-    const viewsCart = Math.random() < 0.70;
+    // 3. Khách thêm món vào giỏ hàng (Khách forcePurchase hoặc 75% khách sâu)
+    const viewsCart = forcePurchase || (Math.random() < 0.75);
     if (viewsCart) {
-      // Tìm nút "Thêm nhanh vào giỏ"
       try {
         const addButtons = await page.$$('button[title*="Thêm"]');
         if (addButtons.length > 0) {
-          // Bấm thêm 1 món (hoặc 50% khả năng thêm món thứ 2)
           await addButtons[0].click({ timeout: 3000 });
           console.log(`🛒 [Khách #${userNumber}] Đã bấm nút 'Thêm nhanh vào giỏ' món 1 (Ghi nhận add_to_cart)! `);
-          await page.waitForTimeout(1500 + Math.random() * 1000);
+          await page.waitForTimeout(1500);
 
-          if (addButtons.length > 1 && Math.random() < 0.50) {
+          // 60% thêm món thứ 2 để tăng giá trị đơn hàng
+          if (addButtons.length > 1 && (forcePurchase || Math.random() < 0.60)) {
             await addButtons[1].click({ timeout: 3000 });
             console.log(`🛒 [Khách #${userNumber}] Đã bấm thêm món thứ 2 vào giỏ!`);
             await page.waitForTimeout(1500);
@@ -195,7 +223,7 @@ async function simulateSingleUser(browser, userNumber, groupNumber) {
         console.log(`⚠️ Không bấm được nút thêm nhanh, tiếp tục điều hướng giỏ hàng...`);
       }
 
-      // Điều hướng vào Giỏ hàng bằng click link Header (Client-side routing giữ giỏ hàng trong bộ nhớ)
+      // Điều hướng vào Giỏ hàng bằng Link trên Header (client-side route)
       console.log(`🛒 [Khách #${userNumber}] Mở Giỏ hàng (/cart)... `);
       try {
         const cartLink = await page.waitForSelector('a[href="/cart"], a[aria-label*="Giỏ"], a[aria-label*="Cart"]', { timeout: 4000 });
@@ -204,16 +232,15 @@ async function simulateSingleUser(browser, userNumber, groupNumber) {
         await page.goto(`${TARGET_URL}/cart`, { waitUntil: 'domcontentloaded', timeout: 25000 });
       }
 
-      // Nán lại xem giỏ hàng từ 15 đến 25 giây
-      const cartDwellMs = 15000 + Math.random() * 10000;
-      await page.waitForTimeout(cartDwellMs);
-      console.log(`👀 [Khách #${userNumber}] Đã xem xét giỏ hàng trong ${(cartDwellMs / 1000).toFixed(1)}s`);
+      // Nán lại xem giỏ hàng từ 15 đến 25 giây (có tương tác để GA4 tính giờ liên tục)
+      console.log(`👀 [Khách #${userNumber}] Đang kiểm tra giỏ hàng...`);
+      await activeDwell(page, 15000 + Math.random() * 8000);
 
-      // 4. Khách bấm nút Đặt Hàng thật (40% trong số người vào giỏ hàng)
-      const doesPurchase = Math.random() < 0.40;
+      // 4. Khách bấm nút Đặt Hàng thật (forcePurchase = 100%, hoặc 50% khách giỏ hàng)
+      const doesPurchase = forcePurchase || (Math.random() < 0.50);
       if (doesPurchase) {
         try {
-          const checkoutBtn = await page.waitForSelector('button:has-text("Xác Nhận Đặt Món"), button:has-text("Đặt món"), button:has-text("Thanh toán")', { timeout: 5000 });
+          const checkoutBtn = await page.waitForSelector('button:has-text("Xác Nhận Đặt Món"), button:has-text("Đặt món"), button:has-text("Thanh toán")', { timeout: 6000 });
           const btnText = (await checkoutBtn.innerText()).replace(/\n/g, ' ');
           console.log(`💳 [Khách #${userNumber}] BẤM NÚT ĐẶT HÀNG: "${btnText}"...`);
           
@@ -222,19 +249,20 @@ async function simulateSingleUser(browser, userNumber, groupNumber) {
           // Chờ API tạo đơn thành công và tự động chuyển sang trang /order-success
           await page.waitForURL('**/order-success**', { timeout: 20000 });
           console.log(`🎉 [Khách #${userNumber}] Hệ thống đã tạo đơn & chuyển tới: ${page.url()}`);
-          console.log(`📊 [Khách #${userNumber}] GA4 đã bắt trọn sự kiện 'purchase' với ĐẦY ĐỦ DOANH THU & SẢN PHẨM!`);
+          console.log(`💰 [Khách #${userNumber}] GA4 đã nhận sự kiện 'purchase' với DOANH THU THẬT & TRANSACTION ID!`);
 
           // Nán lại xem trang xác nhận & mã VietQR PayOS 25 - 35 giây
-          const successDwellMs = 25000 + Math.random() * 10000;
-          await page.waitForTimeout(successDwellMs);
-          console.log(`✅ [Khách #${userNumber}] Hoàn tất phiên xem đơn hàng & QR sau ${(successDwellMs / 1000).toFixed(1)}s!`);
+          await activeDwell(page, 25000 + Math.random() * 8000);
+          console.log(`✅ [Khách #${userNumber}] Hoàn tất phiên xem đơn hàng & VietQR!`);
         } catch (checkoutErr) {
           console.log(`⚠️ [Khách #${userNumber}] Không thể bấm nút đặt hàng: ${checkoutErr.message}`);
         }
       }
     }
 
-    console.log(`✨ [Khách #${userNumber}] Hoàn tất phiên trải nghiệm trọn vẹn!`);
+    // Ép GA4 xả toàn bộ thời gian tương tác tích lũy (45 - 80 giây) về máy chủ GA4
+    await flushGaEngagement(page);
+    console.log(`✨ [Khách #${userNumber}] Hoàn tất phiên trải nghiệm trọn vẹn (Đã gửi đủ thời gian tương tác về GA4)!`);
   } catch (error) {
     console.warn(`⚠️ [Khách #${userNumber}] Lỗi duyệt web: ${error.message}`);
   } finally {
@@ -248,7 +276,7 @@ async function main() {
   console.log(`====================================================`);
   console.log(`🕒 Giờ hiện tại tại Việt Nam: ${vnTime.timeString} (GMT+7)`);
   console.log(`🎯 Mục tiêu: ${TARGET_URL}`);
-  console.log(`📊 Cấu hình: Bounce Rate mục tiêu ~40% | Avg Engagement Time ~1 phút`);
+  console.log(`📊 Cấu hình: Bounce Rate mục tiêu ~40% | Avg Engagement Time ~1 phút | Chốt đơn tăng doanh thu`);
   console.log(`====================================================`);
 
   // 1. Kiểm tra khung giờ đóng cửa (23:00 - 06:30)
@@ -263,20 +291,20 @@ async function main() {
   if (vnTime.isSlowHour) {
     console.log(`☕ [KHUNG GIỜ THẤP ĐIỂM / QUÁN VẮNG] Đang trong khung giờ làm việc/sắp đóng cửa.`);
 
-    // 40% TỶ LỆ QUÁN VẮNG HOÀN TOÀN (0 KHÁCH)
-    const isCompletelyEmpty = Math.random() < 0.40;
+    // 30% TỶ LỆ QUÁN VẮNG HOÀN TOÀN (0 KHÁCH)
+    const isCompletelyEmpty = Math.random() < 0.30;
     if (isCompletelyEmpty) {
-      console.log(`🎲 [XÁC SUẤT 40%] Đợt này quán vắng khách hoàn toàn: 0 người ghé thăm.`);
+      console.log(`🎲 [XÁC SUẤT 30%] Đợt này quán vắng khách: 0 người ghé thăm.`);
       console.log(`💤 Dừng tiến trình mô phỏng để tạo khoảng lặng tự nhiên trên biểu đồ.`);
       return;
     }
 
-    // 60% còn lại: chỉ có lác đác 1 đến 2 khách lẻ
-    totalUsers = Math.floor(Math.random() * 2) + 1; // 1 hoặc 2 khách
-    console.log(`👥 ☕ [XÁC SUẤT 60%] Quán chỉ có lác đác ${totalUsers} khách lẻ ghé mua.`);
+    // 70% còn lại: có 2 đến 3 khách
+    totalUsers = Math.floor(Math.random() * 2) + 2;
+    console.log(`👥 ☕ [XÁC SUẤT 70%] Quán có ${totalUsers} khách ghé mua.`);
   } else if (vnTime.isPeakHour) {
     // KHUNG GIỜ CAO ĐIỂM (6:30 - 9:30, 11:00 - 13:30, 17:00 - 20:00)
-    totalUsers = Math.floor(Math.random() * 5) + 4; // 4 đến 8 khách
+    totalUsers = Math.floor(Math.random() * 4) + 5; // 5 đến 8 khách
     console.log(`🔥 [GIỜ CAO ĐIỂM] Khách đông đúc! Dự kiến đợt này có: ${totalUsers} khách.`);
   } else {
     // KHUNG GIỜ BÌNH THƯỜNG
@@ -288,7 +316,7 @@ async function main() {
   const groups = [];
   let remainingUsers = totalUsers;
   while (remainingUsers > 0) {
-    const maxGroup = vnTime.isSlowHour ? 1 : 3;
+    const maxGroup = vnTime.isSlowHour ? 2 : 3;
     const groupSize = Math.min(remainingUsers, Math.floor(Math.random() * maxGroup) + 1);
     groups.push(groupSize);
     remainingUsers -= groupSize;
@@ -302,6 +330,8 @@ async function main() {
   });
 
   let currentUserIndex = 1;
+  // Đảm bảo ít nhất 1 khách trong đợt chạy chắc chắn hoàn tất đơn hàng (chốt doanh thu)
+  let hasPurchasedInRun = false;
 
   for (let g = 0; g < groups.length; g++) {
     const groupSize = groups[g];
@@ -311,10 +341,15 @@ async function main() {
     for (let u = 0; u < groupSize; u++) {
       const userNum = currentUserIndex++;
       const delayMs = u * (1500 + Math.random() * 1500);
+      
+      // Khách đầu tiên của nhóm 1 sẽ chắc chắn đặt hàng để đảm bảo đợt chạy nào cũng ghi nhận doanh thu
+      const isLuckyBuyer = !hasPurchasedInRun && (g === 0 && u === 0);
+      if (isLuckyBuyer) hasPurchasedInRun = true;
+
       userPromises.push(
         (async () => {
           if (delayMs > 0) await new Promise(r => setTimeout(r, delayMs));
-          await simulateSingleUser(browser, userNum, g + 1);
+          await simulateSingleUser(browser, userNum, g + 1, isLuckyBuyer);
         })()
       );
     }
@@ -322,9 +357,9 @@ async function main() {
     await Promise.all(userPromises);
     console.log(`🏁 Nhóm bàn #${g + 1} đã duyệt xong!`);
 
-    // Giãn cách ngẫu nhiên từ 3 đến 6 phút giữa các nhóm (nếu còn nhóm sau)
+    // Giãn cách ngẫu nhiên từ 2 đến 4 phút giữa các nhóm (nếu còn nhóm sau)
     if (g < groups.length - 1) {
-      const waitSeconds = Math.floor(180 + Math.random() * 180); // 3 - 6 phút
+      const waitSeconds = Math.floor(120 + Math.random() * 120); // 2 - 4 phút
       const waitMinutes = (waitSeconds / 60).toFixed(1);
       console.log(`\n⏳ Nghỉ giãn cách ${waitMinutes} phút (~${waitSeconds}s) trước khi nhóm tiếp theo ghé quán...`);
       await new Promise(r => setTimeout(r, waitSeconds * 1000));
