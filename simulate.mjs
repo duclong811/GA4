@@ -240,20 +240,20 @@ async function simulateSingleUser(browser, userNumber, groupNumber, forcePurchas
       const doesPurchase = forcePurchase || (Math.random() < 0.50);
       if (doesPurchase) {
         try {
-          const checkoutBtn = await page.waitForSelector('button:has-text("Xác Nhận Đặt Món"), button:has-text("Đặt món"), button:has-text("Thanh toán")', { timeout: 6000 });
+          const checkoutBtn = await page.waitForSelector('button:has-text("Đặt món, trả tiền mặt"), button:has-text("tiền mặt"), button:has-text("Xác Nhận Đặt Món"), button:has-text("Đặt món")', { timeout: 8000 });
           const btnText = (await checkoutBtn.innerText()).replace(/\n/g, ' ');
-          console.log(`💳 [Khách #${userNumber}] BẤM NÚT ĐẶT HÀNG: "${btnText}"...`);
+          console.log(`💳 [Khách #${userNumber}] BẤM NÚT ĐẶT HÀNG TIỀN MẶT: "${btnText}"...`);
           
           await checkoutBtn.click();
 
           // Chờ API tạo đơn thành công và tự động chuyển sang trang /order-success
           await page.waitForURL('**/order-success**', { timeout: 20000 });
-          console.log(`🎉 [Khách #${userNumber}] Hệ thống đã tạo đơn & chuyển tới: ${page.url()}`);
+          console.log(`🎉 [Khách #${userNumber}] Đã tạo đơn tiền mặt thành công & chuyển tới: ${page.url()}`);
           console.log(`💰 [Khách #${userNumber}] GA4 đã nhận sự kiện 'purchase' với DOANH THU THẬT & TRANSACTION ID!`);
 
           // Nán lại xem trang xác nhận & mã VietQR PayOS 25 - 35 giây
           await activeDwell(page, 25000 + Math.random() * 8000);
-          console.log(`✅ [Khách #${userNumber}] Hoàn tất phiên xem đơn hàng & VietQR!`);
+          console.log(`✅ [Khách #${userNumber}] Hoàn tất phiên xem đơn hàng tiền mặt thành công!`);
         } catch (checkoutErr) {
           console.log(`⚠️ [Khách #${userNumber}] Không thể bấm nút đặt hàng: ${checkoutErr.message}`);
         }
@@ -291,24 +291,18 @@ async function main() {
   if (vnTime.isSlowHour) {
     console.log(`☕ [KHUNG GIỜ THẤP ĐIỂM / QUÁN VẮNG] Đang trong khung giờ làm việc/sắp đóng cửa.`);
 
-    // 30% TỶ LỆ QUÁN VẮNG HOÀN TOÀN (0 KHÁCH)
-    const isCompletelyEmpty = Math.random() < 0.30;
-    if (isCompletelyEmpty) {
-      console.log(`🎲 [XÁC SUẤT 30%] Đợt này quán vắng khách: 0 người ghé thăm.`);
-      console.log(`💤 Dừng tiến trình mô phỏng để tạo khoảng lặng tự nhiên trên biểu đồ.`);
-      return;
-    }
-
-    // 70% còn lại: có 2 đến 3 khách
-    totalUsers = Math.floor(Math.random() * 2) + 2;
-    console.log(`👥 ☕ [XÁC SUẤT 70%] Quán có ${totalUsers} khách ghé mua.`);
+    // Giờ thấp điểm buổi chiều: 4 đến 5 khách (~4.5 khách)
+    totalUsers = Math.floor(Math.random() * 2) + 4;
+    console.log(`👥 ☕ Quán có ${totalUsers} khách ghé mua vào giờ thấp điểm.`);
   } else if (vnTime.isPeakHour) {
-    // KHUNG GIỜ CAO ĐIỂM (6:30 - 9:30, 11:00 - 13:30, 17:00 - 20:00)
-    totalUsers = Math.floor(Math.random() * 4) + 5; // 5 đến 8 khách
+    // KHUNG GIỜ CAO ĐIỂM (6:30 - 9:30, 11:00 - 13:30, 17:00 - 20:00): 6 đợt trong ngày
+    // Mỗi đợt 10 đến 13 khách (trung bình ~11.5 khách x 6 đợt = ~69 khách)
+    totalUsers = Math.floor(Math.random() * 4) + 10;
     console.log(`🔥 [GIỜ CAO ĐIỂM] Khách đông đúc! Dự kiến đợt này có: ${totalUsers} khách.`);
   } else {
-    // KHUNG GIỜ BÌNH THƯỜNG
-    totalUsers = Math.floor(Math.random() * 3) + 3; // 3 đến 5 khách
+    // KHUNG GIỜ BÌNH THƯỜNG (21:15 tối trước đóng cửa): 1 đợt trong ngày
+    // 5 đến 7 khách (trung bình ~6 khách) -> Tổng ngày ~80 khách
+    totalUsers = Math.floor(Math.random() * 3) + 5;
     console.log(`✨ [GIỜ BÌNH THƯỜNG] Lượng khách vừa phải. Dự kiến có: ${totalUsers} khách.`);
   }
 
@@ -316,7 +310,7 @@ async function main() {
   const groups = [];
   let remainingUsers = totalUsers;
   while (remainingUsers > 0) {
-    const maxGroup = vnTime.isSlowHour ? 2 : 3;
+    const maxGroup = vnTime.isSlowHour ? 3 : 4;
     const groupSize = Math.min(remainingUsers, Math.floor(Math.random() * maxGroup) + 1);
     groups.push(groupSize);
     remainingUsers -= groupSize;
@@ -359,7 +353,7 @@ async function main() {
 
     // Giãn cách ngẫu nhiên từ 2 đến 4 phút giữa các nhóm (nếu còn nhóm sau)
     if (g < groups.length - 1) {
-      const waitSeconds = Math.floor(120 + Math.random() * 120); // 2 - 4 phút
+      const waitSeconds = Math.floor(50 + Math.random() * 30); // 50 - 80 giây (~1 phút)
       const waitMinutes = (waitSeconds / 60).toFixed(1);
       console.log(`\n⏳ Nghỉ giãn cách ${waitMinutes} phút (~${waitSeconds}s) trước khi nhóm tiếp theo ghé quán...`);
       await new Promise(r => setTimeout(r, waitSeconds * 1000));
